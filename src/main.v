@@ -5,21 +5,22 @@ import json
 import time
 import net.http { CommonHeader, Handler, Request, Response, Server }
 
-fn start_env() map[string]string {
-	mut env := map[string]string{}
-	mut home := ""
-	$if windows {
-		os.getenv('USERPROFILE')
+fn get_config_dir() string {
+	config_dir := os.config_dir() or { 
+		panic('Unable to retrieve server configuration.\n${err}')
 	}
-	$if linux {
-		home = os.getenv('HOME')
-	}
-	lines := os.read_lines('${home}/.config/cicd/server/env/default_env') or { return env }
+	return "${config_dir}/Noir/Server"
+}
+
+fn start_env() {
+	config_dir := get_config_dir()
+	lines := os.read_lines('${config_dir}/env/default_env') or { return }
 	for line in lines {
 		slice := line.split('=')
-		env[slice[0].trim_space()] = slice[1].trim_space()
+		name := slice[0].trim_space()
+		value := slice[1].trim_space()
+		os.setenv(name, value, true)
 	}
-	return env
 }
 
 struct PipelineCommand {
@@ -76,16 +77,10 @@ struct ServerHandler implements Handler {
 }
 
 fn (handler ServerHandler) log(message []string) {
-	mut home := ""
-	$if windows {
-		home = os.getenv('USERPROFILE')
-	}
-	$if linux {
-		home = os.getenv('HOME')
-	}
-	log_file_path := '${home}/.config/cicd/server/logs'
+	config_dir := get_config_dir()
+	log_file_path := '${config_dir}/logs'
 	log := message.join('\n')
-	os.write_file('${log_file_path}/cicd-log-${time.now()}', log) or {
+	os.write_file('${log_file_path}/noir-log-${time.now()}', log) or {
 		println('Failed to write log file')
 	}
 	if handler.silent {
@@ -148,19 +143,18 @@ fn (mut handler ServerHandler) handle(request Request) Response {
 	return response
 }
 
-fn start_server(env map[string]string) Server {
+fn start_server() Server {
 	silent := os.args.len > 1 && os.args[1] == 'silent'
-	port := env['SERVER_PORT']
+	port := os.getenv('SERVER_PORT')
 	mut server := Server{}
 	server.addr = 'localhost:${port}'
-	handler := ServerHandler{env['PIPELINE_KEY'], silent}
+	handler := ServerHandler{os.getenv('PIPELINE_KEY'), silent}
 	server.handler = handler
 	return server
 }
 
 fn main() {
-	env := start_env()
-	mut server := start_server(env)
+	start_env()
+	mut server := start_server()
 	server.listen_and_serve()
-	println(server)
 }
