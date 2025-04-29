@@ -81,7 +81,7 @@ fn (handler ServerHandler) log(message []string) {
 		home = os.getenv('USERPROFILE')
 	}
 	$if linux {
-		home = os.getenv['HOME']
+		home = os.getenv('HOME')
 	}
 	log_file_path := '${home}/.config/cicd/server/logs'
 	log := message.join('\n')
